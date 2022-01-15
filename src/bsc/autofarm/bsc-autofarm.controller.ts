@@ -9,8 +9,9 @@ export class BscAutofarmController {
     ){};
 
     @Get('cache/update')
-    updateCache(){ 
-        return 'not implemented!';
+    async updateCache(){ 
+        console.log("Update! ");
+        return await this.service.getPoolInfos(true);
     }
     
     @Get(':target')
