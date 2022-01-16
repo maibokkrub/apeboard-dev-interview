@@ -1,85 +1,87 @@
 import { Injectable } from '@nestjs/common';
-import { BigNumber, ethers, Wallet } from 'ethers';
+import { ethers } from 'ethers';
 import { JsonRpcProvider } from '@ethersproject/providers';
-
-import { MULTICALL_ADDRESS, RPC_URL } from './config';
-import * as MULTICALL_ABI from './abi/multicall.abi.json';
-import { MulticallAbi } from 'types/ethers-contracts';
+import { JsonFragment } from '@ethersproject/abi';
+import { 
+    Contract as MulticallContract, 
+    ContractCall, 
+    Provider as MulticallProvider 
+} from 'ethers-multicall';  
+import { RPC_URL } from './config';
+import { TokenInfo } from './interface/token.interface';
 
 @Injectable()
 export class CoreBscService {
     private provider: JsonRpcProvider;
-    private wallet: Wallet;
-    private multicallInstance: ethers.Contract;
-    private multicallGasLimit: number = 150000000; 
+    private multicallInstance: MulticallProvider;
+    private token: TokenInfo;
     
     constructor(){ 
-        //TODO: make more dynamic, fall back etc.
-        this.provider = new ethers.providers.JsonRpcProvider(
-            RPC_URL[0]
-        );
-        this.wallet = ethers.Wallet.createRandom();
-        this.multicallInstance = new ethers.Contract( 
-            MULTICALL_ADDRESS, MULTICALL_ABI, this.wallet.connect(this.provider)
-        ); 
+        this.getProvider();
+        this.getMulticallInstance();
     }
-    
-    /*
-     *  Getters & Setters 
-     */ 
+
     getProvider(){ 
+        if( !this.provider ) 
+            this.setProvider(new ethers.providers.JsonRpcProvider(
+                RPC_URL[0]
+            ))
         return this.provider; 
     }
     setProvider(newProvider: JsonRpcProvider){ 
         this.provider = newProvider; 
     }
     getContractInstance(address:string, abi:ethers.ContractInterface){ 
-        return new ethers.Contract(address,abi, this.getProvider()); 
+        return new ethers.Contract(address,abi,this.getProvider()); 
     }
 
-    /*
-     *  Multicall Related Functionalities
-     */ 
-    getMulticallInstance(): MulticallAbi { 
-        return this.multicallInstance as MulticallAbi;
+/*
+ *  Tokens Related Functionalities (ERC20/LP)
+ */     
+    private async fetchTokenDetails(address:string){
+        //TODO: refactor to config.ts
+        const res = await fetch(`https://api.pancakeswap.info/api/tokens/${address}`);
+        if (!res.ok)
+            return undefined
+        return res.json();
     }
-    //TODO: proper typing for calls
+    async getTokenDetails(address: string, forceUpdate: boolean = false){
+        //TODO: add stale refetch from updated_at 
+        if( !this.token[address] || forceUpdate ){ 
+            this.token[address] = await this.fetchTokenDetails(address); 
+        }
+        return this.token[address];
+    }
 
-    /*
-    {
-        target: this.autofarmInstance.address, 
-        abi: this.autofarmInstance.interface, 
-        name: 'poolInfo', 
-        input: [i],
+
+/*
+ *  Multicall Related Functionalities
+ */ 
+    async getMulticallInstance(): Promise<MulticallProvider> {
+        if( !this.multicallInstance ){
+            this.multicallInstance = new MulticallProvider(this.provider);
+            await this.multicallInstance.init();
+        }
+        return this.multicallInstance;
     }
+    getMulticallContractInstance(address:string, abi:JsonFragment[]) { 
+        return new MulticallContract(address, abi); 
+    }
+    async multicall(calls: ContractCall[]){ 
+        return await (await this.getMulticallInstance()).all(calls);
+    }
+
+   /* 
+    * batchCalls() use multicall to fetch data from same target address
+    * with different functions and inputs
     */
-    async multiCalls(calls: any[]) { 
-        const chunks = calls.reduce((all,one,i) => {
-            const ch = Math.floor(i/3); 
-            all[ch] = [].concat((all[ch]||[]),one); 
-            return all
-        }, []);
-        
-        const rawResults = chunks.map(async (chunk) => await this.getMulticallInstance()
-            .aggregate(
-                    chunk.map((call) => { 
-                        return { 
-                            target: call.target, 
-                            callData: call.abi.encodeFunctionData(
-                                call.name,
-                                call.input
-                            )
-                        }
-                    }), {
-                        gasLimit: 150000000,
-                    }
-            )
-        );
-        await Promise.all(rawResults); 
-        return chunks.map(
-            (chunk,i) => chunk.map(
-                (call,j) => call.abi.decodeFunctionData(call.name, rawResults[i][j])
-            )
-        );
+    async batchCallsTo(address:string, abi:JsonFragment[], calls:{call:string,inputs:any}[]) {
+        const target = this.getMulticallContractInstance(address, abi); 
+        const results = await this.multicall(calls.map(
+            ({call, inputs}) => target[call](inputs)
+        ));
+        return results;
     }
+    
+
 }
