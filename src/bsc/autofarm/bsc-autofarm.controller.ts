@@ -10,8 +10,8 @@ export class BscAutofarmController {
 
     @Get('cache/update')
     async updateCache(){ 
-        console.log("Update! ");
-        return await this.service.getPoolInfos(true);
+        return await this.service.fetchAllPoolInfos(true);
+        // return '11';
     }
     
     @Get(':target')

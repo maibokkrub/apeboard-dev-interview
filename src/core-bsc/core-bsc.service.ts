@@ -9,12 +9,19 @@ import {
 } from 'ethers-multicall';  
 import { RPC_URL } from './config';
 import { TokenInfo } from './interface/token.interface';
+import { ERC20Abi } from 'types/ethers-contracts/ERC20Abi';
+import * as ERC20ABI from './abi/ERC20.abi.json';
+import * as IUniswapV2Pair_ABI from './abi/UniswapV2pair.abi.json';
+import { UniswapV2pairAbi } from 'types/ethers-contracts';
+import axios from 'axios';
 
 @Injectable()
 export class CoreBscService {
     private provider: JsonRpcProvider;
     private multicallInstance: MulticallProvider;
-    private token: TokenInfo;
+    // Local cache for token & LPs
+    private token: TokenInfo = {};
+    private lps: TokenInfo;
     
     constructor(){ 
         this.getProvider();
@@ -40,15 +47,47 @@ export class CoreBscService {
  */     
     private async fetchTokenDetails(address:string){
         //TODO: refactor to config.ts
-        const res = await fetch(`https://api.pancakeswap.info/api/tokens/${address}`);
-        if (!res.ok)
+        // const {data} = await axios.get(`https://api.pancakeswap.info/api/tokens/${address}`);
+        // console.log(res.data);
+        // if (res.status !== 200){
+            const ercType = this.getContractInstance( 
+                address, ERC20ABI
+            ) as ERC20Abi; 
+            const [name, decimals] = await Promise.allSettled([
+                ercType.name(), 
+                ercType.decimals(), 
+            ]) as PromiseFulfilledResult<any>[]; 
+            return { 
+                name: name.value || 'CALL_ERR',
+                decimals: decimals.value || 'CALL_ERR',
+                address, 
+            }
+        // }
+        // if(res.data.data.name.includes('LP'))
+        //     return PromiseRejectionEvent; 
+        // return res.data.data;
+    }
+    private async fetchLPDetails(address:string){
+        const lpType = this.getContractInstance(
+            address, IUniswapV2Pair_ABI
+        ) as UniswapV2pairAbi;
+        const [token0, token1] = await Promise.allSettled([ 
+            lpType.token0(), 
+            lpType.token1(), 
+        ]) as PromiseFulfilledResult<any>[];
+        if( !token0.value || !token1.value )
             return undefined
-        return res.json();
+        return { 
+            token0: token0.value || 'CALL_ERR', 
+            token1: token1.value || 'CALL_ERR',
+        }
     }
     async getTokenDetails(address: string, forceUpdate: boolean = false){
         //TODO: add stale refetch from updated_at 
         if( !this.token[address] || forceUpdate ){ 
-            this.token[address] = await this.fetchTokenDetails(address); 
+            const tokenDetails = await this.fetchTokenDetails(address); 
+            const lpDetails = await this.fetchLPDetails(address); 
+            this.token[address] = { ...tokenDetails, ...lpDetails}; 
         }
         return this.token[address];
     }
@@ -82,6 +121,9 @@ export class CoreBscService {
         ));
         return results;
     }
-    
 
 }
+function ERC20Token_ABI(wantToken: any, ERC20Token_ABI: any): ERC20Abi {
+    throw new Error('Function not implemented.');
+}
+

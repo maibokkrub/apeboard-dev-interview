@@ -2,7 +2,13 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { AutofarmAbi } from "./AutofarmAbi";
+export type { Stratsx2Abi } from "./Stratsx2Abi";
+export type { ERC20Abi } from "./ERC20Abi";
+export type { UniswapV2pairAbi } from "./UniswapV2pairAbi";
 export type { MulticallAbi } from "./MulticallAbi";
 
 export { AutofarmAbi__factory } from "./factories/AutofarmAbi__factory";
+export { Stratsx2Abi__factory } from "./factories/Stratsx2Abi__factory";
+export { ERC20Abi__factory } from "./factories/ERC20Abi__factory";
+export { UniswapV2pairAbi__factory } from "./factories/UniswapV2pairAbi__factory";
 export { MulticallAbi__factory } from "./factories/MulticallAbi__factory";

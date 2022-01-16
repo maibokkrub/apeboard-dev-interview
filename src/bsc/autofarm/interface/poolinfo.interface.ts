@@ -6,4 +6,5 @@ export interface AutofarmPoolInfo {
     lastRewardBlock: BigNumber;
     accAUTOPerShare: BigNumber;
     strat: string;
+    pairs?: any;
 }
