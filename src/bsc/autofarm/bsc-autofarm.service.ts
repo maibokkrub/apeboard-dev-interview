@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { BigNumber, ethers } from 'ethers';
+import { BigNumber,  } from 'ethers';
 
 import { AutofarmAbi as AutofarmContract, ERC20Abi, UniswapV2pairAbi } from 'types/ethers-contracts';
 import { CoreBscService } from 'src/core-bsc/core-bsc.service';
 import { AutofarmPoolInfo } from './interface/poolinfo.interface';
 
 import * as AUTOFARM_ABI from './abi/autofarm.abi.json';
-import { AbiCoder } from 'ethers/lib/utils';
 
 @Injectable()
 export class BscAutofarmService {
