@@ -86,8 +86,8 @@ export class CoreBscService {
     * It uses multicall, return undefined if failed
     */
     private async fetchTokenDetails(address:string){
-        let tries = 2;
-        while(address){
+        // let tries = 2;
+        // while(address){
             try{
                 const res = await this.batchCallsTo(
                     address, ERC20Token_ABI,[
@@ -105,14 +105,14 @@ export class CoreBscService {
                 }
             } 
             catch(e){
-                if( --tries <=0 )
+                // if( --tries <=0 ) 
                     return undefined;
             }
-        }
+        // }
     }
     private async fetchLPDetails(address:string){
-        let tries = 2;
-        while(address){
+        // let tries = 2;
+        // while(address){
             try{
                 const res = await this.batchCallsTo(
                     address, IUniswapV2Pair_ABI,[
@@ -132,10 +132,10 @@ export class CoreBscService {
                 }
             }
             catch(e){ 
-                if( --tries <=0 )   
+                // if( --tries <=0 )   
                     return undefined;
             }
-        }
+        // }
     }
    /* 
     * getTokenListFromAPI() fetches both tokenList, LPList
