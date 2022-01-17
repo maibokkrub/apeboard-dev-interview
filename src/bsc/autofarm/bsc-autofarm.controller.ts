@@ -10,15 +10,18 @@ export class BscAutofarmController {
 
     @Get('cache/update')
     async updateCache(){
+        console.log('[INFO] updateCache() -- GET ')
         const pools = await this.service.getAllPoolInfo(true); 
         // Autofarm vaults has $AUTO rewards
         const rewards = await this.service.getTokenDetails(
             '0xa184088a740c695e156f91f5cc086a06bb78b827'
         ); 
+        console.log('[INFO] updateCache() -- fetched pool infos ')
+
         
         const fetcher:any[][] = [] ;
         const results = []
-
+        
         for(let i=0; i<pools.length; ++i){
             const pool = pools[i];
             const token = await this.service.getTokenDetails(pool.want);
@@ -44,6 +47,7 @@ export class BscAutofarmController {
             }  
             results.push(res); 
         }
+        console.log('[INFO] updateCache() -- Fetching additional token data')
         await Promise.allSettled(fetcher.flat());
         for await (const x of fetcher) {
             results[x[0]]['pairs'] = [
@@ -51,26 +55,31 @@ export class BscAutofarmController {
                 await x[2],
             ]
         }
+        console.log('[INFO] updateCache() -- Done')
         return results; 
     }
     
     @Get(':target')
-    async getData(@Param('target') target: string){
+    async getUserInfo(@Param('target') target: string){
         if (!ethers.utils.isAddress(target))
             throw new BadRequestException("Invalid address format or checksum");
+        console.log('[INFO] getUserInfo() -- GET', target)
         const staked = await this.service.fetchStakedPools(target);
         const autoDetail = await this.service.getTokenDetails(
             '0xa184088a740c695e156f91f5cc086a06bb78b827'
         );
+        console.log('[INFO] getUserInfo() -- Fetched user staked pools')
         
         const farms = [];
         for await(const x of staked){
+            console.log('[INFO] getUserInfo() -- Fetching for', x.poolId);
             const pool   = await this.service.fetchOnePoolInfo(x.poolId);
             const token  = await this.service.getTokenDetails(pool.want);
             const reward = await this.service.fetchOneRewardDebt(x.poolId, target)
 
+            console.log('[INFO] getUserInfo() -- Fetching additional token for', x.poolId);
             const res = { 
-                tokens: token.type === 'lp' && token.token0 && token.token1 ? 
+                tokens: token.type === 'lp' ? 
                     [
                         await this.service.getTokenDetails(token.token0), 
                         await this.service.getTokenDetails(token.token1),

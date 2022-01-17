@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { JsonRpcProvider } from '@ethersproject/providers';
 import { JsonFragment } from '@ethersproject/abi';
@@ -8,11 +8,8 @@ import {
     Provider as MulticallProvider 
 } from 'ethers-multicall';  
 import { PAIRLIST_ENDPOINT, RPC_URL, TOKENLIST_ENDPOINT, TOKEN_ENDPOINT } from './config';
-import { TokenInfo } from './interface/token.interface';
-import { ERC20Abi } from 'types/ethers-contracts/ERC20Abi';
 import * as ERC20Token_ABI from './abi/ERC20.abi.json';
 import * as IUniswapV2Pair_ABI from './abi/UniswapV2pair.abi.json';
-import { UniswapV2pairAbi } from 'types/ethers-contracts';
 import axios from 'axios';
 
 @Injectable()
@@ -84,6 +81,10 @@ export class CoreBscService {
         }
         return undefined;
     }
+   /* 
+    * fetch___Details() fetches data as ERC20 or UniswapV2Pair
+    * It uses multicall, return undefined if failed
+    */
     private async fetchTokenDetails(address:string){
         let tries = 2;
         while(address){
@@ -104,9 +105,8 @@ export class CoreBscService {
                 }
             } 
             catch(e){
-                if( --tries <=0 ){
+                if( --tries <=0 )
                     return undefined;
-                }
             }
         }
     }
@@ -114,18 +114,6 @@ export class CoreBscService {
         let tries = 2;
         while(address){
             try{
-            // const lpType = this.getContractInstance(
-            //     address, IUniswapV2Pair_ABI
-            // ) as UniswapV2pairAbi;
-            //     const [token0, token1] = await Promise.allSettled([ 
-            //         lpType.token0(), 
-            //         lpType.token1(), 
-            //     ]) as PromiseFulfilledResult<any>[];
-
-            //     return {
-            //         token0: token0.value, 
-            //         token1: token1.value,
-            //     }
                 const res = await this.batchCallsTo(
                     address, IUniswapV2Pair_ABI,[
                         {call: 'token0', inputs: undefined},
@@ -144,12 +132,15 @@ export class CoreBscService {
                 }
             }
             catch(e){ 
-                if( --tries <=0 ){
+                if( --tries <=0 )   
                     return undefined;
-                }
             }
         }
     }
+   /* 
+    * getTokenListFromAPI() fetches both tokenList, LPList
+    * from 3rd party APIs and populate to local cache
+    */
     async getTokenListFromAPI(){ 
         const tokenList = (await this.fetchTokenListFromAPI()) as Object;
         const pairList  = (await this.fetchPairListFromAPI())  as Object;
@@ -170,6 +161,10 @@ export class CoreBscService {
             }
         }
     }
+   /* 
+    * getTokenDetails() fetches token data from blockchain
+    * It tries both abi, and use the one that fits (not call error)
+    */
     async getTokenDetails(address: string, forceUpdate: boolean = false){
         //TODO: add stale refetch from updated_at 
         const key = address.toLowerCase()
@@ -198,7 +193,6 @@ export class CoreBscService {
     async multicall(calls: ContractCall[]){ 
         return await (await this.getMulticallInstance()).all(calls);
     }
-
    /* 
     * batchCalls() use multicall to fetch data from same target address
     * with different functions and inputs
