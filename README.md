@@ -30,3 +30,17 @@ Returns all pools data.
 GET /autofarm/{address}
 ```
 Returns farms staked by the `{address}` provided.
+
+
+# Modules & Structure 
+
+This project was designed to support multiple chain logic.
+`core-{chain}` will house all the logistics, e.g., connections, contracts, token, ...
+`{chain}/{dApp}` will house all logics specific to the application.
+
+The repository currenlty holds 2 services. 
+```
+ - core-bsc         BSC connections, Token name, Multicall
+ - bsc 
+    |- autofarm     PoolInfos, Staked Tokens, ...
+```
