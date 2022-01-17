@@ -7,7 +7,7 @@ import {
     ContractCall, 
     Provider as MulticallProvider 
 } from 'ethers-multicall';  
-import { RPC_URL } from './config';
+import { RPC_URL, TOKENLIST_ENDPOINT, TOKEN_ENDPOINT } from './config';
 import { TokenInfo } from './interface/token.interface';
 import { ERC20Abi } from 'types/ethers-contracts/ERC20Abi';
 import * as ERC20ABI from './abi/ERC20.abi.json';
@@ -26,6 +26,7 @@ export class CoreBscService {
     constructor(){ 
         this.getProvider();
         this.getMulticallInstance();
+        this.getTokenListFromAPI(); 
     }
 
     getProvider(){ 
@@ -44,28 +45,45 @@ export class CoreBscService {
 
 /*
  *  Tokens Related Functionalities (ERC20/LP)
- */     
-    private async fetchTokenDetails(address:string){
-        //TODO: refactor to config.ts
-        // const {data} = await axios.get(`https://api.pancakeswap.info/api/tokens/${address}`);
-        // console.log(res.data);
-        // if (res.status !== 200){
-            const ercType = this.getContractInstance( 
-                address, ERC20ABI
-            ) as ERC20Abi; 
-            const [name, decimals] = await Promise.allSettled([
-                ercType.name(), 
-                ercType.decimals(), 
-            ]) as PromiseFulfilledResult<any>[]; 
-            return { 
-                name: name.value || 'CALL_ERR',
-                decimals: decimals.value || 'CALL_ERR',
-                address, 
-            }
-        // }
-        // if(res.data.data.name.includes('LP'))
-        //     return PromiseRejectionEvent; 
-        // return res.data.data;
+ *  fetch___Details: Fetch from blockchain
+ *  fetch___FromAPI: Fetch from public API endpoint: pancake / conigeckgo ...
+ */
+    private async fetchTokenListFromAPI(source:string = 'pancake'){
+        const url = TOKENLIST_ENDPOINT[source];
+        if( url ){
+            console.log(`[INFO] Fetching tokenList from ${url}`);
+            const {data} = await axios.get(url) || undefined;
+            return data;
+        }
+        return undefined;
+    }
+    private async fetchTokenFromAPI(address:string, source:string = 'pancake'){ 
+        const url = TOKEN_ENDPOINT[source].replace(':address', address);
+        if( url ){
+            console.log(`[INFO] Fetching token from ${url}`);
+            const {data} = await axios.get(url) || undefined;
+            if( data ) 
+                switch( source ){ 
+                    case 'pancake': 
+                        return data.data; 
+                }
+        }
+        return undefined;
+    }
+    private async fetchTokenDetails(address:string){    
+        const ercType = this.getContractInstance( 
+            address, ERC20ABI
+        ) as ERC20Abi; 
+        //TODO: There might be a better way
+        const [name, decimals] = await Promise.allSettled([
+            ercType.name(), 
+            ercType.decimals(), 
+        ]) as PromiseFulfilledResult<any>[]; 
+        return { 
+            name: name.value || 'CALL_ERR',
+            decimals: decimals.value || 'CALL_ERR',
+            address, 
+        }
     }
     private async fetchLPDetails(address:string){
         const lpType = this.getContractInstance(
@@ -75,12 +93,17 @@ export class CoreBscService {
             lpType.token0(), 
             lpType.token1(), 
         ]) as PromiseFulfilledResult<any>[];
+        
         if( !token0.value || !token1.value )
             return undefined
         return { 
             token0: token0.value || 'CALL_ERR', 
             token1: token1.value || 'CALL_ERR',
         }
+    }
+    async getTokenListFromAPI(){ 
+        const tokenList = await this.fetchTokenListFromAPI();
+        this.token = {...this.token, ...tokenList};
     }
     async getTokenDetails(address: string, forceUpdate: boolean = false){
         //TODO: add stale refetch from updated_at 
