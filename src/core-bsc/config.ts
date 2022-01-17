@@ -1,8 +1,8 @@
 export const 
     RPC_URL = [
         'https://bsc-dataseed.binance.org/', 
-        'https://bsc-dataseed1.defibit.io/', 
-        'https://bsc-dataseed1.ninicoin.io/',
+        'https://bsc-dataseed1.defibit.io/',
+        'https://bsc-dataseed1.ninicoin.io/', 
     ]; 
 
 export const 
@@ -12,6 +12,11 @@ export const
 export const
     TOKENLIST_ENDPOINT: TokenList = { 
         pancake: `https://api.pancakeswap.info/api/v2/tokens`,
+    }
+
+export const
+    PAIRLIST_ENDPOINT: TokenList = { 
+        pancake: `https://api.pancakeswap.info/api/v2/pairs`,
     }
 
 export const

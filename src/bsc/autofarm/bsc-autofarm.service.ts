@@ -6,8 +6,7 @@ import { CoreBscService } from 'src/core-bsc/core-bsc.service';
 import { AutofarmPoolInfo } from './interface/poolinfo.interface';
 
 import * as AUTOFARM_ABI from './abi/autofarm.abi.json';
-import * as IUniswapV2Pair_ABI from "../../core-bsc/abi/UniswapV2pair.abi.json";
-import * as ERC20Token_ABI from "../../core-bsc/abi/ERC20.abi.json";
+import { AbiCoder } from 'ethers/lib/utils';
 
 @Injectable()
 export class BscAutofarmService {
@@ -34,39 +33,70 @@ export class BscAutofarmService {
         return this.maxPoolID;
     }
 
+    async getTokenDetails(address:string){ 
+        if( !address )
+            throw Error("getTokenDetails: Missing address");
+        return await this.bsc.getTokenDetails(address);
+    }
+
     async fetchOnePoolInfo(id: number){ 
-        return await this.autofarmInstance.poolInfo(BigNumber.from(id));
+        if( !this.poolInfos[id] ){
+            const info = await this.autofarmInstance.poolInfo(BigNumber.from(id))
+            this.poolInfos[id] = { 
+                ...info,
+                pairs: await this.bsc.getTokenDetails(info.want),
+            }
+        }
+        return this.poolInfos[id]
+    }
+    async fetchOneRewardDebt(id: number, address:string){ 
+        return this.autofarmInstance.userInfo(BigNumber.from(id), address);
     }
 
     /*
      * fetchAllPoolInfos() fetches on-chain pool data details
      * automatically fetch token info from strats contract
+     * Alternatively, https://static.autofarm.network/bsc/farm_data.json
      */
-    async fetchAllPoolInfos(forceUpdate:boolean = false) { 
-        // Hackily, use Autofarm's frontend datasource at 
-        // https://static.autofarm.network/bsc/farm_data.json
-
-        if( forceUpdate || !this.poolInfos ){
-            await this.getMaxPoolID();
-            const res = await this.bsc.batchCallsTo(
-                this.autofarmInstance.address, 
-                AUTOFARM_ABI,
-                [...Array(this.maxPoolID).keys()].map( i => Object({ 
-                    call: 'poolInfo', 
-                    inputs: BigNumber.from(i),
-                }))
-            )
-            //TODO: Fix
-            const poolCalls = res.map(async x => this.bsc.getTokenDetails(x.want)) as any[];
-            const pool      = await Promise.allSettled(poolCalls) as PromiseFulfilledResult<any>[];
-
-            //TODO: process pool strats and add detail to poolInfo
-            this.poolInfos = res.map((info,i) => Object({
-                ...info, 
-                pairs: pool[i].value || 'CALL_ERR', 
+    private async fetchAllPoolInfos() {
+        await this.getMaxPoolID();
+        const res = await this.bsc.batchCallsTo(
+            this.autofarmInstance.address, 
+            AUTOFARM_ABI,
+            [...Array(this.maxPoolID).keys()].map( i => Object({ 
+                call: 'poolInfo', 
+                inputs: BigNumber.from(i),
             }))
-            // this.poolInfos = res;
+        )
+
+        const poolCalls = res.map(async x => this.bsc.getTokenDetails(x.want)) as any[];
+        const pool      = await Promise.allSettled(poolCalls) as PromiseFulfilledResult<AutofarmPoolInfo>[];
+
+        //TODO: process pool strats and add detail to poolInfo
+        this.poolInfos = res.map((info,i) => Object({
+            ...info,
+            pairs: pool[i].value || 'CALL_ERR',
+        }))
+    }
+    async getAllPoolInfo(forceUpdate:boolean = false) { 
+        if( forceUpdate || !this.poolInfos ){
+            await this.fetchAllPoolInfos();
         }
         return this.poolInfos;
+    }
+    
+    async fetchStakedPools(wallet:string){ 
+        const calls = [...Array(this.maxPoolID).keys()].map( 
+            i => this.autofarmInstance.stakedWantTokens(
+                BigNumber.from(i), wallet
+            )
+        )
+        const res = await Promise.allSettled(calls) as PromiseFulfilledResult<BigNumber>[]
+        return res.reduce(
+            (prev, {value}, i) => (value && !value.isZero()) ? [...prev, Object({
+                poolId: i, 
+                balance: value, 
+            })] : prev
+        ,[])
     }
 }
