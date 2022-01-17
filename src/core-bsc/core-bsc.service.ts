@@ -93,13 +93,15 @@ export class CoreBscService {
                 address, ERC20ABI
             ) as ERC20Abi; 
             //TODO: There might be a better way
-            const [name, decimals] = await Promise.allSettled([
+            const [name, decimals, symbol] = await Promise.allSettled([
                 ercType.name(), 
-                ercType.decimals(), 
+                ercType.decimals(),
+                ercType.symbol(),
             ]) as PromiseFulfilledResult<any>[]; 
             return { 
                 name: name.value || 'CALL_ERR',
                 decimals: decimals.value || 'CALL_ERR',
+                symbol: symbol.value || 'CALL_ERR', 
                 address, 
             }
         } 
@@ -187,7 +189,9 @@ export class CoreBscService {
     async batchCallsTo(address:string, abi:JsonFragment[], calls:{call:string,inputs:any}[]) {
         const target = this.getMulticallContractInstance(address, abi);
             const results = await this.multicall(calls.map(
-                ({call, inputs}) => target[call](...inputs)
+                ({call, inputs}) => Array.isArray(inputs) ? 
+                    target[call](...inputs) : 
+                    target[call](inputs)
             ));
         return results;
     }
