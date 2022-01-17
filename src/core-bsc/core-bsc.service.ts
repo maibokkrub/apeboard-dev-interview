@@ -10,7 +10,7 @@ import {
 import { PAIRLIST_ENDPOINT, RPC_URL, TOKENLIST_ENDPOINT, TOKEN_ENDPOINT } from './config';
 import { TokenInfo } from './interface/token.interface';
 import { ERC20Abi } from 'types/ethers-contracts/ERC20Abi';
-import * as ERC20ABI from './abi/ERC20.abi.json';
+import * as ERC20Token_ABI from './abi/ERC20.abi.json';
 import * as IUniswapV2Pair_ABI from './abi/UniswapV2pair.abi.json';
 import { UniswapV2pairAbi } from 'types/ethers-contracts';
 import axios from 'axios';
@@ -30,15 +30,13 @@ export class CoreBscService {
 
     getProvider(){ 
         if( !this.providers.length ){
-            for(let i=0; i<4; i++){
-                RPC_URL.map((rpc) => {
-                    const conn = new ethers.providers.JsonRpcProvider(rpc); 
-                    if( conn ){
-                        this.providers.push(conn)
-                        console.log('[INFO] Registered RPC ', rpc);
-                    }
-                })
-            }
+            RPC_URL.map((rpc) => {
+                const conn = new ethers.providers.JsonRpcProvider(rpc); 
+                if( conn ){
+                    this.providers.push(conn)
+                    console.log('[INFO] Registered RPC ', rpc);
+                }
+            })
         }
         return this.providers[Math.floor(Math.random() * 32)%this.providers.length]; 
     }
@@ -87,46 +85,69 @@ export class CoreBscService {
         return undefined;
     }
     private async fetchTokenDetails(address:string){
-        if(address)
-        try{
-            const ercType = this.getContractInstance( 
-                address, ERC20ABI
-            ) as ERC20Abi; 
-            //TODO: There might be a better way
-            const [name, decimals, symbol] = await Promise.allSettled([
-                ercType.name(), 
-                ercType.decimals(),
-                ercType.symbol(),
-            ]) as PromiseFulfilledResult<any>[]; 
-            return { 
-                name: name.value || 'CALL_ERR',
-                decimals: decimals.value || 'CALL_ERR',
-                symbol: symbol.value || 'CALL_ERR', 
-                address, 
+        let tries = 2;
+        while(address){
+            try{
+                const res = await this.batchCallsTo(
+                    address, ERC20Token_ABI,[
+                        {call: 'name', inputs: undefined},
+                        {call: 'decimals', inputs: undefined},
+                        {call: 'symbol', inputs: undefined},
+                    ]
+                )
+                return { 
+                    address,
+                    name: res[0], 
+                    decimals: res[1], 
+                    symbol: res[2],
+                    type: 'ERC20',
+                }
+            } 
+            catch(e){
+                if( --tries <=0 ){
+                    return undefined;
+                }
             }
-        } 
-        catch(e){ 
-            console.error("ERR -- fetchTokendetails", address, e);
         }
     }
     private async fetchLPDetails(address:string){
-        if(address)
-        try{
-        const lpType = this.getContractInstance(
-            address, IUniswapV2Pair_ABI
-        ) as UniswapV2pairAbi;
-            const [token0, token1] = await Promise.allSettled([ 
-                lpType.token0(), 
-                lpType.token1(), 
-            ]) as PromiseFulfilledResult<any>[];
+        let tries = 2;
+        while(address){
+            try{
+            // const lpType = this.getContractInstance(
+            //     address, IUniswapV2Pair_ABI
+            // ) as UniswapV2pairAbi;
+            //     const [token0, token1] = await Promise.allSettled([ 
+            //         lpType.token0(), 
+            //         lpType.token1(), 
+            //     ]) as PromiseFulfilledResult<any>[];
 
-            return {
-                token0: token0.value, 
-                token1: token1.value,
+            //     return {
+            //         token0: token0.value, 
+            //         token1: token1.value,
+            //     }
+                const res = await this.batchCallsTo(
+                    address, IUniswapV2Pair_ABI,[
+                        {call: 'token0', inputs: undefined},
+                        {call: 'token1', inputs: undefined},
+                        {call: 'name', inputs: undefined},
+                        {call: 'symbol', inputs: undefined},
+                    ]
+                )
+                return { 
+                    address,
+                    token0: res[0], 
+                    token1: res[1], 
+                    name: res[2], 
+                    symbol: res[3],
+                    type: 'lp',
+                }
             }
-        }
-        catch(e){ 
-            console.error("ERR -- fetchLPdetails", address, e);
+            catch(e){ 
+                if( --tries <=0 ){
+                    return undefined;
+                }
+            }
         }
     }
     async getTokenListFromAPI(){ 
@@ -155,11 +176,7 @@ export class CoreBscService {
         if( !this.token[key] || forceUpdate ){ 
             const lpDetails = await this.fetchLPDetails(address);
             const tokenDetails = await this.fetchTokenDetails(address); 
-            if( lpDetails.token0 || lpDetails.token1 ) {
-                this.token[key] = {...tokenDetails, ...lpDetails, type:'lp' };
-            }
-            else 
-                this.token[key] = {...tokenDetails, type:'ERC20'}; 
+            this.token[key] = {...tokenDetails, ...lpDetails};
         }
         return this.token[key];
     }
@@ -189,9 +206,13 @@ export class CoreBscService {
     async batchCallsTo(address:string, abi:JsonFragment[], calls:{call:string,inputs:any}[]) {
         const target = this.getMulticallContractInstance(address, abi);
             const results = await this.multicall(calls.map(
-                ({call, inputs}) => Array.isArray(inputs) ? 
-                    target[call](...inputs) : 
-                    target[call](inputs)
+                ({call, inputs}) => {
+                    if( Array.isArray(inputs) )
+                        return target[call](...inputs)
+                    if( inputs ) 
+                        return target[call](inputs)
+                    return target[call]()
+                }
             ));
         return results;
     }
