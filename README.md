@@ -9,9 +9,17 @@ This is an assignment for ApeBoard interview.
 -   poolRewards are hard coded with $AUTO (not sure about logic)
 -   not all tokens has a price. Only those in top 1000 pancake list is fetched. 
 
-## Set Up 
+## Staring Container
+
+There is no published version of the container. You'll need to manually build and run the conatiner.
+
 ```
-cd src
+docker build -t apeapi . && docker run --rm -it -p 3000:3000 apeapi
+```
+
+
+## Manual Set Up 
+```
 yarn 
 yarn start
 ```
@@ -22,7 +30,8 @@ yarn start
 GET /autofarm/cache/update
 ```
 Updates available pool infos from smart contract.
-Returns all pools data.
+Returns all pools data. Will refetch the poolInfos, while use the cached token data. 
+Could extend to refetch token data in future endpoints. 
 
 --- 
 
@@ -31,6 +40,13 @@ GET /autofarm/{address}
 ```
 Returns farms staked by the `{address}` provided.
 
+--- 
+
+```
+GET /autofarm/token/{address}
+```
+Returns token data for the `{address}` provided. 
+This is just a quick tool for debugging purposes.
 
 # Modules & Structure 
 
